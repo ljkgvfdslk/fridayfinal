@@ -63,7 +63,7 @@
         <a id="adminNavBtn" href="admin.html" class="px-3 py-1.5 rounded-lg text-amber-300 hover:text-amber-200 hover:bg-slate-800 border border-amber-500/30 flex items-center gap-1.5 transition hidden">
           <i class="fa-solid fa-shield-halved text-xs"></i> <span>Admin Dashboard</span>
         </a>
-        <button onclick="CorpSystem.clearSession()" class="px-3 py-1.5 rounded-lg text-rose-300 hover:text-white hover:bg-rose-900/40 border border-rose-500/30 flex items-center gap-1.5 transition ml-2">
+        <button id="logoutBtn" class="px-3 py-1.5 rounded-lg text-rose-300 hover:text-white hover:bg-rose-900/40 border border-rose-500/30 flex items-center gap-1.5 transition ml-2">
           <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i> <span class="hidden sm:inline">ออกจากระบบ</span>
         </button>
       </nav>
@@ -187,7 +187,7 @@
                 เลือกอุปกรณ์สำนักงานที่ต้องการเบิก <span class="text-rose-500">*</span>
               </label>
               <div class="relative">
-                <select id="reqItemId" required onchange="onSupplyItemSelected(this.value)"
+                <select id="reqItemId" required
                   class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition font-medium">
                   <option value="" disabled selected>-- กรุณาเลือกรายการอุปกรณ์สำนักงาน --</option>
                   <!-- Populated dynamically with integer item_id -->
@@ -208,13 +208,13 @@
                 จำนวนที่ต้องการเบิก (Quantity) <span class="text-rose-500">*</span>
               </label>
               <div class="flex items-center gap-2">
-                <button type="button" onclick="adjustQuantity(-1)"
+                <button type="button" id="qtyMinusBtn"
                   class="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-base transition border border-slate-300 active:scale-95">
                   -
                 </button>
                 <input type="number" id="reqQuantity" required min="1" max="50" value="1"
                   class="flex-1 py-2 text-center bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition" />
-                <button type="button" onclick="adjustQuantity(1)"
+                <button type="button" id="qtyPlusBtn"
                   class="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-base transition border border-slate-300 active:scale-95">
                   +
                 </button>
@@ -268,7 +268,7 @@
 
             <!-- Status Filter -->
             <div class="flex items-center gap-2">
-              <select id="userStatusFilter" onchange="filterUserRequisitions(this.value)"
+              <select id="userStatusFilter"
                 class="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
                 <option value="all">สถานะทั้งหมด</option>
                 <option value="pending">รอการอนุมัติ (Pending)</option>
@@ -341,8 +341,25 @@
 
   <!-- Dashboard JavaScript Logic -->
   <script>
+    // Ensure CorpSystem is globally accessible
+    const CorpSystem = window.CorpSystem || (typeof globalThis !== 'undefined' ? globalThis.CorpSystem : null);
+    window.CorpSystem = CorpSystem;
+
+    // Attach logout button listener
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        if (window.CorpSystem && window.CorpSystem.clearSession) {
+          window.CorpSystem.clearSession();
+        } else {
+          localStorage.removeItem('corp_user');
+          window.location.href = 'index.html';
+        }
+      });
+    }
+
     // 1. RBAC Guard: Ensure user is logged in
-    const currentUser = CorpSystem.requireAuth();
+    const currentUser = CorpSystem ? CorpSystem.requireAuth() : null;
     let allMyRequisitions = [];
 
     if (currentUser) {
@@ -365,12 +382,40 @@
     async function initPage() {
       await populateSupplyItems();
       await loadMyRequisitions();
+      setupEventListeners();
+    }
+
+    function setupEventListeners() {
+      const select = document.getElementById('reqItemId');
+      if (select) {
+        select.addEventListener('change', function() {
+          onSupplyItemSelected(this.value);
+        });
+      }
+
+      const minusBtn = document.getElementById('qtyMinusBtn');
+      if (minusBtn) {
+        minusBtn.addEventListener('click', () => adjustQuantity(-1));
+      }
+
+      const plusBtn = document.getElementById('qtyPlusBtn');
+      if (plusBtn) {
+        plusBtn.addEventListener('click', () => adjustQuantity(1));
+      }
+
+      const filterSelect = document.getElementById('userStatusFilter');
+      if (filterSelect) {
+        filterSelect.addEventListener('change', function() {
+          filterUserRequisitions(this.value);
+        });
+      }
     }
 
     // Populate Office Supply Items with integer IDs
     async function populateSupplyItems() {
       const select = document.getElementById('reqItemId');
-      const items = await CorpSystem.getSupplyItems();
+      if (!select) return;
+      const items = (CorpSystem && CorpSystem.getSupplyItems) ? await CorpSystem.getSupplyItems() : [];
 
       select.innerHTML = '<option value="" disabled selected>-- กรุณาเลือกรายการอุปกรณ์สำนักงาน --</option>';
 
@@ -400,6 +445,7 @@
 
     function onSupplyItemSelected(itemId) {
       const select = document.getElementById('reqItemId');
+      if (!select) return;
       const selectedOption = select.options[select.selectedIndex];
       if (selectedOption) {
         const stock = selectedOption.dataset.stock;
@@ -410,17 +456,21 @@
         qtyInput.max = stock || 50;
       }
     }
+    window.onSupplyItemSelected = onSupplyItemSelected;
 
     function adjustQuantity(delta) {
       const qtyInput = document.getElementById('reqQuantity');
+      if (!qtyInput) return;
       let val = parseInt(qtyInput.value) || 1;
       val = Math.max(1, Math.min(parseInt(qtyInput.max || 50), val + delta));
       qtyInput.value = val;
     }
+    window.adjustQuantity = adjustQuantity;
 
     // Load and Render User's OWN Requisitions
     async function loadMyRequisitions() {
       try {
+        if (!currentUser) return;
         allMyRequisitions = await CorpSystem.fetchUserRequisitions(currentUser.id);
         updateKpis(allMyRequisitions);
         renderRequisitionsTable(allMyRequisitions);
@@ -450,6 +500,7 @@
         renderRequisitionsTable(filtered);
       }
     }
+    window.filterUserRequisitions = filterUserRequisitions;
 
     function renderRequisitionsTable(list) {
       const tbody = document.getElementById('userRequisitionsTableBody');
@@ -633,6 +684,7 @@
         }
       });
     }
+    window.confirmDeleteRequisition = confirmDeleteRequisition;
 
     function escapeHtml(str) {
       if (!str) return '';
@@ -643,6 +695,7 @@
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
     }
+    window.escapeHtml = escapeHtml;
   </script>
 </body>
 </html>

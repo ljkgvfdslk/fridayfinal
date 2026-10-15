@@ -152,7 +152,7 @@
                   </div>
                   <input type="password" id="loginPassword" required placeholder="••••••••"
                     class="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition" />
-                  <button type="button" onclick="togglePasswordVisibility('loginPassword', this)" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600">
+                  <button type="button" id="toggleLoginPasswordBtn" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600">
                     <i class="fa-regular fa-eye"></i>
                   </button>
                 </div>
@@ -231,7 +231,7 @@
                     <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                       <i class="fa-solid fa-phone"></i>
                     </div>
-                    <input type="tel" id="regPhone" required placeholder="0812345678" oninput="updateMaskedPreview(this.value)"
+                    <input type="tel" id="regPhone" required placeholder="0812345678"
                       class="w-full pl-10 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition" />
                   </div>
                   <p class="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
@@ -300,6 +300,10 @@
 
   <!-- Page Specific Logic -->
   <script>
+    // Ensure CorpSystem is globally accessible
+    const CorpSystem = window.CorpSystem || (typeof globalThis !== 'undefined' ? globalThis.CorpSystem : null);
+    window.CorpSystem = CorpSystem;
+
     // Tab switching
     const tabLoginBtn = document.getElementById('tabLoginBtn');
     const tabRegisterBtn = document.getElementById('tabRegisterBtn');
@@ -322,23 +326,45 @@
 
     function togglePasswordVisibility(inputId, btn) {
       const input = document.getElementById(inputId);
+      if (!input || !btn) return;
       const icon = btn.querySelector('i');
       if (input.type === 'password') {
         input.type = 'text';
-        icon.className = 'fa-regular fa-eye-slash';
+        if (icon) icon.className = 'fa-regular fa-eye-slash';
       } else {
         input.type = 'password';
-        icon.className = 'fa-regular fa-eye';
+        if (icon) icon.className = 'fa-regular fa-eye';
       }
     }
+    window.togglePasswordVisibility = togglePasswordVisibility;
 
     function updateMaskedPreview(val) {
       const preview = document.getElementById('phoneMaskPreview');
+      if (!preview) return;
+      const maskFn = (window.CorpSystem && window.CorpSystem.maskPhoneNumber) || window.maskPhoneNumber;
       if (!val) {
         preview.textContent = '-';
+      } else if (typeof maskFn === 'function') {
+        preview.textContent = maskFn(val);
       } else {
-        preview.textContent = CorpSystem.maskPhoneNumber(val);
+        preview.textContent = val.replace(/(\d{3})\d{3,4}(\d{3,4})/, '$1-***-$2');
       }
+    }
+    window.updateMaskedPreview = updateMaskedPreview;
+
+    // Attach event listeners via addEventListener
+    const toggleLoginBtn = document.getElementById('toggleLoginPasswordBtn');
+    if (toggleLoginBtn) {
+      toggleLoginBtn.addEventListener('click', function() {
+        togglePasswordVisibility('loginPassword', this);
+      });
+    }
+
+    const regPhoneInput = document.getElementById('regPhone');
+    if (regPhoneInput) {
+      regPhoneInput.addEventListener('input', function() {
+        updateMaskedPreview(this.value);
+      });
     }
 
     // ================= LOGIN SUBMISSION =================

@@ -9,9 +9,11 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 // Initialize Supabase Client
 let supabaseClient = null;
-if (window.supabase && typeof window.supabase.createClient === 'function') {
+const globalScope = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : global);
+
+if (globalScope.supabase && typeof globalScope.supabase.createClient === 'function') {
   try {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    supabaseClient = globalScope.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     console.log("Supabase Client initialized successfully:", SUPABASE_URL);
   } catch (err) {
     console.error("Failed to initialize Supabase Client:", err);
@@ -162,7 +164,6 @@ async function registerUserInSupabase(userData) {
     throw new Error("Supabase Client is not initialized.");
   }
 
-  // Schema: id (uuid), username (text), password_hash (text), role (text), full_name (text), phone (text), created_at (timestamp)
   const userPayload = {
     id: userData.id || generateUUID(),
     username: userData.username,
@@ -180,7 +181,6 @@ async function registerUserInSupabase(userData) {
 
   if (error) {
     console.error("Supabase Users Insert Error:", error);
-    // Also save in local persistence as backup
     const localUsers = JSON.parse(localStorage.getItem('corp_users') || '[]');
     localUsers.push(userPayload);
     localStorage.setItem('corp_users', JSON.stringify(localUsers));
@@ -193,7 +193,6 @@ async function registerUserInSupabase(userData) {
     };
   }
 
-  // Persist locally as active user
   const localUsers = JSON.parse(localStorage.getItem('corp_users') || '[]');
   localUsers.push(userPayload);
   localStorage.setItem('corp_users', JSON.stringify(localUsers));
@@ -230,7 +229,6 @@ async function loginUserFromSupabase(identifier, passwordHash) {
     }
   }
 
-  // Also verify against local users repository
   if (!matchedUser) {
     const localUsers = JSON.parse(localStorage.getItem('corp_users') || '[]');
     matchedUser = localUsers.find(u => 
@@ -245,7 +243,6 @@ async function loginUserFromSupabase(identifier, passwordHash) {
 
 /**
  * 1. REAL SUPABASE INTEGRATION: Form 1 Office Supply Requisition (table `requisitions`)
- * Schema: id (integer auto-generated), user_id (uuid), item_id (integer), quantity (integer), reason (text), status (text), created_at (timestamp)
  */
 async function insertRequisitionToSupabase(reqData) {
   if (!supabaseClient) {
@@ -266,7 +263,6 @@ async function insertRequisitionToSupabase(reqData) {
     .insert([payload])
     .select();
 
-  // Save to local persistence cache with readable details for UI
   const localEntry = {
     id: (data && data[0] && data[0].id) ? data[0].id : ("local-" + Date.now()),
     ...payload,
@@ -298,7 +294,6 @@ async function insertRequisitionToSupabase(reqData) {
 
 /**
  * 1. REAL SUPABASE INTEGRATION: Form 2 Service Satisfaction Feedback (table `feedbacks`)
- * Schema: id (integer auto-generated), user_id (uuid), rating (integer 1-5), comment (text), created_at (timestamp)
  */
 async function insertFeedbackToSupabase(fbData) {
   if (!supabaseClient) {
@@ -365,7 +360,6 @@ async function fetchUserRequisitions(userId) {
     }
   }
 
-  // Combine with local storage cache
   const localList = JSON.parse(localStorage.getItem('corp_requisitions') || '[]');
   const userLocal = localList.filter(r => r.user_id === userId);
 
@@ -397,7 +391,6 @@ async function deleteRequisitionFromSupabase(reqId, userId, isAdmin = false) {
     }
   }
 
-  // Also remove from local persistence
   const current = JSON.parse(localStorage.getItem('corp_requisitions') || '[]');
   const filtered = current.filter(r => {
     if (String(r.id) === String(reqId)) {
@@ -465,7 +458,6 @@ async function updateRequisitionStatusInSupabase(reqId, newStatus, adminComment 
     }
   }
 
-  // Update local storage entry as well
   const current = JSON.parse(localStorage.getItem('corp_requisitions') || '[]');
   const target = current.find(r => String(r.id) === String(reqId));
   if (target) {
@@ -533,8 +525,45 @@ function showToast(icon, title, timer = 2500) {
   }
 }
 
-// Attach to window
-window.CorpSystem = {
+// 1. Create the CorpSystem definition object
+const CorpSystem = {
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  supabaseClient,
+  getSupplyItems,
+  hashPassword,
+  generateUUID,
+  maskPhoneNumber,
+  getCurrentUser,
+  setCurrentUser,
+  clearSession,
+  requireAuth,
+  registerUserInSupabase,
+  loginUserFromSupabase,
+  insertRequisitionToSupabase,
+  insertFeedbackToSupabase,
+  fetchUserRequisitions,
+  deleteRequisitionFromSupabase,
+  fetchAllRequisitionsForAdmin,
+  updateRequisitionStatusInSupabase,
+  fetchAllFeedbacks,
+  showToast
+};
+
+// 2. CRITICAL: Explicitly attach to global window and globalThis objects
+if (typeof window !== 'undefined') {
+  window.CorpSystem = CorpSystem;
+  window.clearSession = clearSession;
+  window.maskPhoneNumber = maskPhoneNumber;
+}
+if (typeof globalThis !== 'undefined') {
+  globalThis.CorpSystem = CorpSystem;
+}
+
+// Support ES Module export as well if imported as a module
+export default CorpSystem;
+export {
+  CorpSystem,
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
   supabaseClient,

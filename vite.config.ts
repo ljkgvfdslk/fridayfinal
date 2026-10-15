@@ -4,11 +4,13 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  const rootDir = import.meta.dirname || process.cwd();
   return {
+    publicDir: 'public',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(rootDir, '.'),
       },
     },
     server: {
@@ -21,10 +23,10 @@ export default defineConfig(() => {
     build: {
       rollupOptions: {
         input: {
-          main: path.resolve(__dirname, 'index.html'),
-          dashboard: path.resolve(__dirname, 'dashboard.html'),
-          feedback: path.resolve(__dirname, 'feedback.html'),
-          admin: path.resolve(__dirname, 'admin.html'),
+          main: path.resolve(rootDir, 'index.html'),
+          dashboard: path.resolve(rootDir, 'dashboard.html'),
+          feedback: path.resolve(rootDir, 'feedback.html'),
+          admin: path.resolve(rootDir, 'admin.html'),
         },
       },
     },

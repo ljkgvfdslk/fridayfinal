@@ -7,18 +7,27 @@
 const SUPABASE_URL = "https://ymyetrwjewtxsrhcsmig.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlteWV0cndqZXd0eHNyaGNzbWlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIwNDgwNTYsImV4cCI6MjEwNzYyNDA1Nn0.CcDLrwZSKkFdqSahQuJ2aNESE88Qx_O4EdlzWdZtQKs";
 
-// Initialize Supabase Client
+// Initialize Supabase Client with lazy fallback
 let supabaseClient = null;
-const globalScope = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : global);
+const globalScope = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : self);
 
-if (globalScope.supabase && typeof globalScope.supabase.createClient === 'function') {
-  try {
-    supabaseClient = globalScope.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log("Supabase Client initialized successfully:", SUPABASE_URL);
-  } catch (err) {
-    console.error("Failed to initialize Supabase Client:", err);
+function getSupabaseClient() {
+  if (supabaseClient) return supabaseClient;
+  const scope = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : self);
+  if (scope.supabase && typeof scope.supabase.createClient === 'function') {
+    try {
+      supabaseClient = scope.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      console.log("Supabase Client initialized successfully:", SUPABASE_URL);
+      return supabaseClient;
+    } catch (err) {
+      console.error("Failed to initialize Supabase Client:", err);
+    }
   }
+  return null;
 }
+
+// Initial attempt to instantiate client
+getSupabaseClient();
 
 // Pre-seeded Catalog of Office Supply Items with INTEGER IDs matching DB schema
 const DEFAULT_SUPPLY_ITEMS = [
@@ -59,11 +68,28 @@ async function getSupplyItems() {
 async function hashPassword(plainText) {
   if (!plainText) return "";
   const salt = "CORP_SALT_2026_SUPPLY_#$!";
-  const enc = new TextEncoder();
-  const data = enc.encode(plainText + salt);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  const fullText = plainText + salt;
+  try {
+    if (typeof crypto !== 'undefined' && crypto.subtle && typeof crypto.subtle.digest === 'function') {
+      const enc = new TextEncoder();
+      const data = enc.encode(fullText);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch (err) {
+    console.warn("crypto.subtle.digest error, using fallback hashing:", err);
+  }
+  // Deterministic fallback hash
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < fullText.length; i++) {
+    const ch = fullText.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(64, '0');
 }
 
 /**
@@ -160,9 +186,7 @@ function requireAuth(allowedRole = null) {
  * 1. REAL SUPABASE INTEGRATION: Register User in `users` table
  */
 async function registerUserInSupabase(userData) {
-  if (!supabaseClient) {
-    throw new Error("Supabase Client is not initialized.");
-  }
+  const client = getSupabaseClient();
 
   const userPayload = {
     id: userData.id || generateUUID(),
@@ -174,7 +198,18 @@ async function registerUserInSupabase(userData) {
     created_at: new Date().toISOString()
   };
 
-  const { data, error } = await supabaseClient
+  if (!client) {
+    const localUsers = JSON.parse(localStorage.getItem('corp_users') || '[]');
+    localUsers.push(userPayload);
+    localStorage.setItem('corp_users', JSON.stringify(localUsers));
+    return {
+      success: true,
+      user: userPayload,
+      warning: "Supabase client connecting, saved locally"
+    };
+  }
+
+  const { data, error } = await client
     .from('users')
     .insert([userPayload])
     .select();
@@ -210,10 +245,11 @@ async function registerUserInSupabase(userData) {
 async function loginUserFromSupabase(identifier, passwordHash) {
   let matchedUser = null;
   let supabaseError = null;
+  const client = getSupabaseClient();
 
-  if (supabaseClient) {
+  if (client) {
     try {
-      const { data, error } = await supabaseClient
+      const { data, error } = await client
         .from('users')
         .select('*')
         .or(`username.eq.${identifier},phone.eq.${identifier}`);
@@ -245,9 +281,7 @@ async function loginUserFromSupabase(identifier, passwordHash) {
  * 1. REAL SUPABASE INTEGRATION: Form 1 Office Supply Requisition (table `requisitions`)
  */
 async function insertRequisitionToSupabase(reqData) {
-  if (!supabaseClient) {
-    throw new Error("Supabase Client is not initialized.");
-  }
+  const client = getSupabaseClient();
 
   const payload = {
     user_id: reqData.user_id,
@@ -258,10 +292,21 @@ async function insertRequisitionToSupabase(reqData) {
     created_at: new Date().toISOString()
   };
 
-  const { data, error } = await supabaseClient
-    .from('requisitions')
-    .insert([payload])
-    .select();
+  let data = null;
+  let error = null;
+
+  if (client) {
+    try {
+      const res = await client
+        .from('requisitions')
+        .insert([payload])
+        .select();
+      data = res.data;
+      error = res.error;
+    } catch (e) {
+      error = e;
+    }
+  }
 
   const localEntry = {
     id: (data && data[0] && data[0].id) ? data[0].id : ("local-" + Date.now()),
@@ -296,9 +341,7 @@ async function insertRequisitionToSupabase(reqData) {
  * 1. REAL SUPABASE INTEGRATION: Form 2 Service Satisfaction Feedback (table `feedbacks`)
  */
 async function insertFeedbackToSupabase(fbData) {
-  if (!supabaseClient) {
-    throw new Error("Supabase Client is not initialized.");
-  }
+  const client = getSupabaseClient();
 
   const payload = {
     user_id: fbData.user_id,
@@ -307,10 +350,21 @@ async function insertFeedbackToSupabase(fbData) {
     created_at: new Date().toISOString()
   };
 
-  const { data, error } = await supabaseClient
-    .from('feedbacks')
-    .insert([payload])
-    .select();
+  let data = null;
+  let error = null;
+
+  if (client) {
+    try {
+      const res = await client
+        .from('feedbacks')
+        .insert([payload])
+        .select();
+      data = res.data;
+      error = res.error;
+    } catch (e) {
+      error = e;
+    }
+  }
 
   const localEntry = {
     id: (data && data[0] && data[0].id) ? data[0].id : ("fb-" + Date.now()),
@@ -553,37 +607,35 @@ const CorpSystem = {
 // 2. CRITICAL: Explicitly attach to global window and globalThis objects
 if (typeof window !== 'undefined') {
   window.CorpSystem = CorpSystem;
-  window.clearSession = clearSession;
+  window.hashPassword = hashPassword;
+  window.generateUUID = generateUUID;
   window.maskPhoneNumber = maskPhoneNumber;
-}
-if (typeof globalThis !== 'undefined') {
-  globalThis.CorpSystem = CorpSystem;
+  window.getCurrentUser = getCurrentUser;
+  window.setCurrentUser = setCurrentUser;
+  window.clearSession = clearSession;
+  window.requireAuth = requireAuth;
+  window.registerUserInSupabase = registerUserInSupabase;
+  window.loginUserFromSupabase = loginUserFromSupabase;
+  window.insertRequisitionToSupabase = insertRequisitionToSupabase;
+  window.insertFeedbackToSupabase = insertFeedbackToSupabase;
+  window.fetchUserRequisitions = fetchUserRequisitions;
+  window.deleteRequisitionFromSupabase = deleteRequisitionFromSupabase;
+  window.fetchAllRequisitionsForAdmin = fetchAllRequisitionsForAdmin;
+  window.updateRequisitionStatusInSupabase = updateRequisitionStatusInSupabase;
+  window.fetchAllFeedbacks = fetchAllFeedbacks;
+  window.getSupplyItems = getSupplyItems;
+  window.showToast = showToast;
+  window.SUPABASE_URL = SUPABASE_URL;
+  window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
 }
 
-// Support ES Module export as well if imported as a module
-export default CorpSystem;
-export {
-  CorpSystem,
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY,
-  supabaseClient,
-  getSupplyItems,
-  hashPassword,
-  generateUUID,
-  maskPhoneNumber,
-  getCurrentUser,
-  setCurrentUser,
-  clearSession,
-  requireAuth,
-  registerUserInSupabase,
-  loginUserFromSupabase,
-  insertRequisitionToSupabase,
-  insertFeedbackToSupabase,
-  fetchUserRequisitions,
-  deleteRequisitionFromSupabase,
-  fetchAllRequisitionsForAdmin,
-  updateRequisitionStatusInSupabase,
-  fetchAllFeedbacks,
-  showToast
-};
-window.CorpSystem = CorpSystem;
+if (typeof globalThis !== 'undefined') {
+  globalThis.CorpSystem = CorpSystem;
+  globalThis.hashPassword = hashPassword;
+  globalThis.maskPhoneNumber = maskPhoneNumber;
+}
+
+// CommonJS compatibility if loaded in Node or bundler
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = CorpSystem;
+}

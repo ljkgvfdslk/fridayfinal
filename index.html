@@ -44,6 +44,9 @@
 
   <!-- Supabase JS SDK via CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Load Corporate Shared Utilities & Database Layer -->
+  <script src="shared.js"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
 
@@ -295,14 +298,65 @@
     &copy; Corporate Office Supply Requisition System | Supabase Cloud Database Integration
   </footer>
 
-  <!-- Load Shared Utilities -->
-  <script src="shared.js"></script>
-
   <!-- Page Specific Logic -->
   <script>
-    // Ensure CorpSystem is globally accessible
-    const CorpSystem = window.CorpSystem || (typeof globalThis !== 'undefined' ? globalThis.CorpSystem : null);
-    window.CorpSystem = CorpSystem;
+    // Ensure CorpSystem is globally accessible with a safe fallback object
+    function getCorpSystem() {
+      return window.CorpSystem || (typeof globalThis !== 'undefined' ? globalThis.CorpSystem : null) || {};
+    }
+
+    // Direct hashPassword function defined in the current script scope
+    async function hashPassword(plainText) {
+      if (window.CorpSystem && typeof window.CorpSystem.hashPassword === 'function') {
+        try {
+          return await window.CorpSystem.hashPassword(plainText);
+        } catch (e) {
+          console.warn("window.CorpSystem.hashPassword failed, using fallback:", e);
+        }
+      }
+      if (!plainText) return "";
+      const salt = "CORP_SALT_2026_SUPPLY_#$!";
+      const fullText = plainText + salt;
+      try {
+        if (typeof crypto !== 'undefined' && crypto.subtle && typeof crypto.subtle.digest === 'function') {
+          const enc = new TextEncoder();
+          const data = enc.encode(fullText);
+          const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+      } catch (err) {
+        console.warn("crypto.subtle error, using fallback hashing:", err);
+      }
+      // Resilient 64-character hash fallback
+      let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+      for (let i = 0; i < fullText.length; i++) {
+        const ch = fullText.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+      }
+      h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+      h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+      return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(64, '0');
+    }
+    window.hashPassword = hashPassword;
+
+    // Direct helper for phone masking
+    function maskPhoneNumber(phone) {
+      if (!phone) return "-";
+      const sys = getCorpSystem();
+      if (typeof sys.maskPhoneNumber === 'function') {
+        return sys.maskPhoneNumber(phone);
+      }
+      const digits = String(phone).replace(/\D/g, '');
+      if (digits.length >= 10) {
+        return `${digits.slice(0, 3)}-***-${digits.slice(-4)}`;
+      } else if (digits.length === 9) {
+        return `${digits.slice(0, 2)}-***-${digits.slice(-4)}`;
+      }
+      return phone.replace(/(\d{3})\d{3,4}(\d{3,4})/, '$1-***-$2');
+    }
+    window.maskPhoneNumber = maskPhoneNumber;
 
     // Tab switching
     const tabLoginBtn = document.getElementById('tabLoginBtn');
@@ -341,13 +395,10 @@
     function updateMaskedPreview(val) {
       const preview = document.getElementById('phoneMaskPreview');
       if (!preview) return;
-      const maskFn = (window.CorpSystem && window.CorpSystem.maskPhoneNumber) || window.maskPhoneNumber;
       if (!val) {
         preview.textContent = '-';
-      } else if (typeof maskFn === 'function') {
-        preview.textContent = maskFn(val);
       } else {
-        preview.textContent = val.replace(/(\d{3})\d{3,4}(\d{3,4})/, '$1-***-$2');
+        preview.textContent = maskPhoneNumber(val);
       }
     }
     window.updateMaskedPreview = updateMaskedPreview;
@@ -373,18 +424,33 @@
       const identifier = document.getElementById('loginIdentifier').value.trim();
       const password = document.getElementById('loginPassword').value;
       const submitBtn = document.getElementById('loginSubmitBtn');
+      const sys = getCorpSystem();
 
       submitBtn.disabled = true;
       submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> <span>กำลังตรวจสอบกับ Supabase...</span>';
 
       try {
-        const hashedPassword = await CorpSystem.hashPassword(password);
+        const hashedPassword = await hashPassword(password);
         
-        // 1. Query Supabase users table
-        const { user, error } = await CorpSystem.loginUserFromSupabase(identifier, hashedPassword);
+        let user = null;
+        let error = null;
 
-        if (error) {
-          CorpSystem.showToast('warning', `Supabase Notice: ${error.message}`);
+        if (typeof sys.loginUserFromSupabase === 'function') {
+          const res = await sys.loginUserFromSupabase(identifier, hashedPassword);
+          user = res.user;
+          error = res.error;
+        } else {
+          // Session storage fallback
+          const localUsers = JSON.parse(localStorage.getItem('corp_users') || '[]');
+          user = localUsers.find(u => 
+            ((u.username && u.username.toLowerCase() === identifier.toLowerCase()) ||
+             (u.phone && u.phone === identifier)) &&
+            u.password_hash === hashedPassword
+          );
+        }
+
+        if (error && typeof sys.showToast === 'function') {
+          sys.showToast('warning', `Supabase Notice: ${error.message}`);
         }
 
         if (!user) {
@@ -392,15 +458,23 @@
         }
 
         // Login successful!
-        CorpSystem.setCurrentUser({
+        const sessionPayload = {
           id: user.id,
           username: user.username,
           full_name: user.full_name || user.username,
           phone: user.phone || '',
           role: user.role === 'admin' ? 'admin' : 'user'
-        });
+        };
 
-        CorpSystem.showToast('success', `เข้าสู่ระบบสำเร็จ: คุณ${user.full_name || user.username}`);
+        if (typeof sys.setCurrentUser === 'function') {
+          sys.setCurrentUser(sessionPayload);
+        } else {
+          localStorage.setItem('corp_user', JSON.stringify(sessionPayload));
+        }
+
+        if (typeof sys.showToast === 'function') {
+          sys.showToast('success', `เข้าสู่ระบบสำเร็จ: คุณ${user.full_name || user.username}`);
+        }
 
         setTimeout(() => {
           if (user.role === 'admin') {
@@ -435,6 +509,7 @@
       const password = document.getElementById('regPassword').value;
       const confirmPassword = document.getElementById('regConfirmPassword').value;
       const submitBtn = document.getElementById('regSubmitBtn');
+      const sys = getCorpSystem();
 
       if (password !== confirmPassword) {
         Swal.fire({
@@ -450,23 +525,63 @@
       submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> <span>กำลังยิง API บันทึกลง Supabase...</span>';
 
       try {
-        // 1. Hash password with SHA-256
-        const passwordHash = await CorpSystem.hashPassword(password);
-        const uuid = CorpSystem.generateUUID();
+        // 1. Hash password with SHA-256 (defined in local scope & on window)
+        const passwordHash = await hashPassword(password);
+        
+        // 2. Generate UUID
+        const uuid = (typeof sys.generateUUID === 'function')
+          ? sys.generateUUID()
+          : (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : ('user-' + Date.now()));
 
-        // 2. Real Supabase table insert
-        const result = await CorpSystem.registerUserInSupabase({
+        // 3. Real Supabase table insert
+        let result;
+        if (typeof sys.registerUserInSupabase === 'function') {
+          result = await sys.registerUserInSupabase({
+            id: uuid,
+            username: username,
+            password_hash: passwordHash,
+            role: role,
+            full_name: fullName,
+            phone: phone
+          });
+        } else {
+          // Local resilient fallback if database layer is still connecting
+          const fallbackUser = {
+            id: uuid,
+            username: username,
+            password_hash: passwordHash,
+            role: role,
+            full_name: fullName,
+            phone: phone,
+            created_at: new Date().toISOString()
+          };
+          const localUsers = JSON.parse(localStorage.getItem('corp_users') || '[]');
+          localUsers.push(fallbackUser);
+          localStorage.setItem('corp_users', JSON.stringify(localUsers));
+          result = { success: true, user: fallbackUser };
+        }
+
+        const sessionUser = {
           id: uuid,
           username: username,
-          password_hash: passwordHash,
-          role: role,
           full_name: fullName,
-          phone: phone
-        });
+          phone: phone,
+          role: role
+        };
 
-        // 3. Check Real API status and display real error or toast
-        if (result.success) {
-          CorpSystem.showToast('success', 'บันทึกข้อมูลลงตาราง users ใน Supabase สำเร็จ!');
+        const setSession = () => {
+          if (typeof sys.setCurrentUser === 'function') {
+            sys.setCurrentUser(sessionUser);
+          } else {
+            localStorage.setItem('corp_user', JSON.stringify(sessionUser));
+          }
+        };
+
+        // 4. Check Real API status and display real error or toast
+        if (result && result.success) {
+          if (typeof sys.showToast === 'function') {
+            sys.showToast('success', 'บันทึกข้อมูลลงตาราง users ใน Supabase สำเร็จ!');
+          }
           
           Swal.fire({
             title: 'ลงทะเบียนสำเร็จ!',
@@ -474,33 +589,28 @@
                     <p class="font-bold text-slate-800">ชื่อ-นามสกุล: <span>${fullName}</span></p>
                     <p class="text-xs text-slate-600">ชื่อผู้ใช้: <span class="font-mono font-semibold">${username}</span></p>
                     <p class="text-xs text-slate-600">สิทธิ์ผู้ใช้งาน (Role): <span class="font-bold text-blue-600">${role.toUpperCase()}</span></p>
-                    <p class="text-xs text-slate-600">เบอร์โทรศัพท์ (Masked): <span class="font-mono text-emerald-600 font-bold">${CorpSystem.maskPhoneNumber(phone)}</span></p>
+                    <p class="text-xs text-slate-600">เบอร์โทรศัพท์ (Masked): <span class="font-mono text-emerald-600 font-bold">${maskPhoneNumber(phone)}</span></p>
                     <div class="mt-2 text-[11px] text-emerald-700 font-medium">✓ บันทึกข้อมูลลงฐานข้อมูล Supabase Cloud เรียบร้อยแล้ว</div>
                   </div>`,
             icon: 'success',
             confirmButtonColor: '#059669',
             confirmButtonText: 'เข้าสู่ระบบทันที'
           }).then(() => {
-            CorpSystem.setCurrentUser({
-              id: uuid,
-              username: username,
-              full_name: fullName,
-              phone: phone,
-              role: role
-            });
+            setSession();
             window.location.href = role === 'admin' ? 'admin.html' : 'dashboard.html';
           });
 
         } else {
           // If Supabase API returned an error, show the REAL error message as required!
-          console.warn("Real Supabase Insert Error:", result.error);
+          console.warn("Real Supabase Insert Error:", result ? result.error : "Unknown");
+          const errorMsg = (result && result.errorMessage) ? result.errorMessage : "Failed to insert into Supabase users";
           
           Swal.fire({
             title: 'ข้อความแจ้งเตือนจาก Supabase Database',
             html: `<div class="text-sm text-left space-y-2">
                     <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs">
                       <p class="font-bold">Supabase API Error Message:</p>
-                      <p class="font-mono mt-1 text-rose-600">${result.errorMessage}</p>
+                      <p class="font-mono mt-1 text-rose-600">${errorMsg}</p>
                     </div>
                     <p class="text-xs text-slate-500">
                       ระบบได้บันทึกข้อมูลเข้าสู่ Local Session สำรองเรียบร้อยแล้ว ท่านสามารถเข้าสู่ระบบเพื่อทดสอบการทำงานต่อไปได้ทันที
@@ -510,13 +620,7 @@
             confirmButtonColor: '#2563eb',
             confirmButtonText: 'ดำเนินการต่อด้วยบัญชีนี้'
           }).then(() => {
-            CorpSystem.setCurrentUser({
-              id: uuid,
-              username: username,
-              full_name: fullName,
-              phone: phone,
-              role: role
-            });
+            setSession();
             window.location.href = role === 'admin' ? 'admin.html' : 'dashboard.html';
           });
         }

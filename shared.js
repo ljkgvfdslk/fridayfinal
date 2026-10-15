@@ -586,3 +586,4 @@ export {
   fetchAllFeedbacks,
   showToast
 };
+window.CorpSystem = CorpSystem;

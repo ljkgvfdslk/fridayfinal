@@ -1,0 +1,6 @@
+{
+  "name": "Corporate Office Supply Requisition System",
+  "description": "Enterprise Office Supply Requisition System with RBAC, Supabase database integration, password hashing, and phone data masking",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

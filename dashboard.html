@@ -33,9 +33,6 @@
 
   <!-- Supabase JS SDK via CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-  <!-- Load Shared Utilities & Database Layer -->
-  <script src="shared.js"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans antialiased">
 
@@ -112,6 +109,41 @@
       </div>
     </div>
   </div>
+
+  <script>
+    // Immediate early profile hydration from localStorage (currentUser / corp_user)
+    (function() {
+      try {
+        const raw = localStorage.getItem('currentUser') || localStorage.getItem('corp_user');
+        if (raw) {
+          const u = JSON.parse(raw);
+          const name = u.full_name || u.username;
+          if (name) {
+            const h1 = document.getElementById('userFullName');
+            if (h1) h1.textContent = name;
+            const av = document.getElementById('userAvatarLetter');
+            if (av) av.textContent = name.charAt(0).toUpperCase();
+            const un = document.getElementById('userUsername');
+            if (un) un.textContent = u.username || '-';
+            const ph = document.getElementById('userMaskedPhone');
+            if (ph && u.phone) {
+              const d = u.phone.replace(/\D/g, '');
+              ph.textContent = d.length >= 10 ? d.slice(0, 3) + '-***-' + d.slice(-4) : u.phone;
+            }
+            if (u.role === 'admin') {
+              const rb = document.getElementById('userRoleBadge');
+              if (rb) {
+                rb.textContent = 'ADMIN';
+                rb.className = "px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wide";
+              }
+              const ab = document.getElementById('adminNavBtn');
+              if (ab) ab.classList.remove('hidden');
+            }
+          }
+        }
+      } catch (e) {}
+    })();
+  </script>
 
   <!-- Main Content Layout -->
   <main class="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
@@ -193,7 +225,28 @@
                 <select id="reqItemId" required
                   class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition font-medium">
                   <option value="" disabled selected>-- กรุณาเลือกรายการอุปกรณ์สำนักงาน --</option>
-                  <!-- Populated dynamically with integer item_id -->
+                  <optgroup label="หมวดหมู่: กระดาษและงานพิมพ์ (Paper)">
+                    <option value="1" data-stock="150" data-name="กระดาษถ่ายเอกสาร A4 Double A 80 แกรม (500 แผ่น/รีม)" data-unit="รีม">กระดาษถ่ายเอกสาร A4 Double A 80 แกรม (คงเหลือ: 150 รีม)</option>
+                    <option value="12" data-stock="50" data-name="สติกเกอร์ลาเบลอเนกประสงค์สำหรับเครื่องพิมพ์เลเซอร์" data-unit="แพ็ค">สติกเกอร์ลาเบลอเนกประสงค์สำหรับเครื่องพิมพ์เลเซอร์ (คงเหลือ: 50 แพ็ค)</option>
+                  </optgroup>
+                  <optgroup label="หมวดหมู่: เครื่องเขียน (Writing & Stationery)">
+                    <option value="2" data-stock="85" data-name="ปากกาลูกลื่น Ballpoint Pen 0.5 มม. (กล่อง 12 ด้าม)" data-unit="กล่อง">ปากกาลูกลื่น Ballpoint Pen 0.5 มม. (คงเหลือ: 85 กล่อง)</option>
+                    <option value="4" data-stock="65" data-name="ปากกาไฮไลท์เน้นข้อความ Pastel (ชุด 4 สี)" data-unit="ชุด">ปากกาไฮไลท์เน้นข้อความ Pastel (คงเหลือ: 65 ชุด)</option>
+                    <option value="5" data-stock="120" data-name="กระดาษโน้ตดัชนีมีกาวในตัว Sticky Notes (แพ็ค 4 สี)" data-unit="ชุด">กระดาษโน้ตดัชนีมีกาวในตัว Sticky Notes (คงเหลือ: 120 ชุด)</option>
+                    <option value="9" data-stock="140" data-name="คลิปหนีบกระดาษโลหะเคลือบกันสนิม (กล่อง 100 ชิ้น)" data-unit="กล่อง">คลิปหนีบกระดาษโลหะเคลือบกันสนิม (คงเหลือ: 140 กล่อง)</option>
+                    <option value="10" data-stock="75" data-name="ลิควิดเทปลบคำผิด (แพ็ค 3 ชิ้น)" data-unit="แพ็ค">ลิควิดเทปลบคำผิด (คงเหลือ: 75 แพ็ค)</option>
+                  </optgroup>
+                  <optgroup label="หมวดหมู่: สมุดและบันทึก (Notebook)">
+                    <option value="3" data-stock="95" data-name="สมุดโน้ตสันห่วง A5 แบบมีเส้น (100 แผ่น)" data-unit="เล่ม">สมุดโน้ตสันห่วง A5 แบบมีเส้น (คงเหลือ: 95 เล่ม)</option>
+                  </optgroup>
+                  <optgroup label="หมวดหมู่: อุปกรณ์สำนักงาน (Desk Tools)">
+                    <option value="6" data-stock="45" data-name="เครื่องเย็บกระดาษโลหะ No.10 พร้อมลวดเย็บ" data-unit="ชุด">เครื่องเย็บกระดาษโลหะ No.10 พร้อมลวดเย็บ (คงเหลือ: 45 ชุด)</option>
+                    <option value="7" data-stock="60" data-name="ปากกาไวท์บอร์ดหัวตัด 4 สี (น้ำเงิน แดง ดำ เขียว)" data-unit="ชุด">ปากกาไวท์บอร์ดหัวตัด 4 สี (คงเหลือ: 60 ชุด)</option>
+                  </optgroup>
+                  <optgroup label="หมวดหมู่: อุปกรณ์ไอทีและสุขภาพ (IT & Ergonomics)">
+                    <option value="8" data-stock="24" data-name="เมาส์ไร้สายเพื่อสุขภาพ Silent Optical Mouse" data-unit="ตัว">เมาส์ไร้สายเพื่อสุขภาพ Silent Optical Mouse (คงเหลือ: 24 ตัว)</option>
+                    <option value="11" data-stock="18" data-name="แท่นวางจอคอมพิวเตอร์เพื่อสุขภาพ พร้อมช่องเก็บคีย์บอร์ด" data-unit="ชิ้น">แท่นวางจอคอมพิวเตอร์เพื่อสุขภาพ (คงเหลือ: 18 ชิ้น)</option>
+                  </optgroup>
                 </select>
               </div>
               <div id="stockBadgeContainer" class="mt-2 text-xs flex items-center justify-between text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
@@ -282,7 +335,7 @@
           </div>
 
           <!-- Requisitions List / Table -->
-          <div class="overflow-x-auto">
+          <div id="tableWrapper" class="overflow-x-auto">
             <table class="w-full text-left text-xs text-slate-600">
               <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[11px]">
                 <tr>
@@ -293,8 +346,8 @@
                   <th class="py-3 px-3 text-center">จัดการ</th>
                 </tr>
               </thead>
-              <tbody id="userRequisitionsTableBody" class="divide-y divide-slate-100">
-                <tr>
+              <tbody id="userRequisitionsTableBody" class="divide-y divide-slate-100 history-list-container">
+                <tr id="history-loading-spinner">
                   <td colspan="5" class="py-8 text-center text-slate-400">
                     <i class="fa-solid fa-circle-notch fa-spin text-xl text-blue-500"></i>
                     <p class="mt-2 text-xs">กำลังโหลดข้อมูลคำขอของคุณ...</p>
@@ -309,7 +362,7 @@
             <div class="w-14 h-14 mx-auto rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center text-2xl mb-3">
               <i class="fa-regular fa-folder-open"></i>
             </div>
-            <h3 class="text-sm font-bold text-slate-700">ยังไม่มีรายการขอเบิกอุปกรณ์</h3>
+            <h3 class="text-sm font-bold text-slate-700">ยังไม่มีประวัติการเบิกอุปกรณ์</h3>
             <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">เริ่มยื่นคำขอเบิกอุปกรณ์ได้โดยเลือกรายการจากแบบฟอร์มด้านซ้ายมือ</p>
           </div>
 
@@ -348,6 +401,21 @@
     const CorpSystem = window.CorpSystem || (typeof globalThis !== 'undefined' ? globalThis.CorpSystem : null);
     window.CorpSystem = CorpSystem;
 
+    // Dual-ID alias resolver for history list container
+    const _origGetElementById = document.getElementById.bind(document);
+    document.getElementById = function(id) {
+      if (id === 'history-list-container') {
+        return _origGetElementById('history-list-container') || _origGetElementById('userRequisitionsTableBody');
+      }
+      if (id === 'userRequisitionsTableBody') {
+        return _origGetElementById('userRequisitionsTableBody') || _origGetElementById('history-list-container');
+      }
+      return _origGetElementById(id);
+    };
+
+    const supabaseClient = window.supabaseClient || (CorpSystem && CorpSystem.getSupabaseClient ? CorpSystem.getSupabaseClient() : null);
+    window.supabaseClient = supabaseClient;
+
     // Attach logout button listener
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
@@ -355,36 +423,67 @@
         if (window.CorpSystem && window.CorpSystem.clearSession) {
           window.CorpSystem.clearSession();
         } else {
+          localStorage.removeItem('currentUser');
           localStorage.removeItem('corp_user');
-          window.location.href = 'index.html';
+          window.location.replace('index.html');
         }
       });
     }
 
-    // 1. RBAC Guard: Ensure user is logged in
-    const currentUser = CorpSystem ? CorpSystem.requireAuth() : null;
+    // 1. RBAC Guard: Retrieve currentUser from localStorage ('currentUser' or 'corp_user') or Supabase
+    const currentUser = (window.CorpSystem && typeof window.CorpSystem.getCurrentUser === 'function')
+      ? window.CorpSystem.getCurrentUser()
+      : (function() {
+          try {
+            const raw = localStorage.getItem('currentUser') || localStorage.getItem('corp_user');
+            return raw ? JSON.parse(raw) : null;
+          } catch(e) { return null; }
+        })();
+
     let allMyRequisitions = [];
 
-    if (currentUser) {
-      document.getElementById('userFullName').textContent = currentUser.full_name || currentUser.username;
-      document.getElementById('userAvatarLetter').textContent = (currentUser.full_name || currentUser.username).charAt(0).toUpperCase();
-      document.getElementById('userUsername').textContent = currentUser.username || '-';
-      document.getElementById('userMaskedPhone').textContent = CorpSystem.maskPhoneNumber(currentUser.phone);
-      
-      const roleBadge = document.getElementById('userRoleBadge');
-      roleBadge.textContent = currentUser.role.toUpperCase();
-      if (currentUser.role === 'admin') {
-        roleBadge.className = "px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wide";
-        const adminBtn = document.getElementById('adminNavBtn');
-        if (adminBtn) adminBtn.classList.remove('hidden');
+    // If currentUser is truly missing or logged out, redirect automatically to the Login screen.
+    if (!currentUser || !currentUser.id) {
+      window.location.replace('index.html');
+    } else {
+      // Immediately replace "กำลังโหลดข้อมูล..." with currentUser.full_name or currentUser.username
+      const displayName = currentUser.full_name || currentUser.username || 'User';
+      const nameElem = document.getElementById('userFullName');
+      if (nameElem) nameElem.textContent = displayName;
+
+      const avatarElem = document.getElementById('userAvatarLetter');
+      if (avatarElem) avatarElem.textContent = displayName.charAt(0).toUpperCase();
+
+      const usernameElem = document.getElementById('userUsername');
+      if (usernameElem) usernameElem.textContent = currentUser.username || '-';
+
+      const phoneElem = document.getElementById('userMaskedPhone');
+      if (phoneElem) {
+        phoneElem.textContent = (window.CorpSystem && window.CorpSystem.maskPhoneNumber)
+          ? window.CorpSystem.maskPhoneNumber(currentUser.phone)
+          : (currentUser.phone || '-');
       }
 
+      const roleBadge = document.getElementById('userRoleBadge');
+      if (roleBadge) {
+        roleBadge.textContent = (currentUser.role || 'user').toUpperCase();
+        if (currentUser.role === 'admin') {
+          roleBadge.className = "px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wide";
+          const adminBtn = document.getElementById('adminNavBtn');
+          if (adminBtn) adminBtn.classList.remove('hidden');
+        }
+      }
+
+      // Once currentUser is restored, automatically trigger fetchUserRequisitions() and load supplies dropdown list
       initPage();
     }
 
     async function initPage() {
+      // 1. Load supplies dropdown list
       await populateSupplyItems();
-      await loadMyRequisitions();
+      // 2. Automatically trigger fetchUserRequisitions()
+      await fetchUserRequisitions();
+      // 3. Setup event listeners
       setupEventListeners();
     }
 
@@ -414,11 +513,24 @@
       }
     }
 
-    // Populate Office Supply Items with integer IDs
+    // Populate Office Supply Items dynamically from Supabase (with fallback if empty)
     async function populateSupplyItems() {
       const select = document.getElementById('reqItemId');
       if (!select) return;
-      const items = (CorpSystem && CorpSystem.getSupplyItems) ? await CorpSystem.getSupplyItems() : [];
+
+      let items = [];
+      try {
+        if (window.CorpSystem && typeof window.CorpSystem.getSupplyItems === 'function') {
+          items = await window.CorpSystem.getSupplyItems();
+        }
+      } catch (err) {
+        console.warn("Error fetching supply items from Supabase:", err);
+      }
+
+      // Guaranteed fallback so dropdown is NEVER blank
+      if (!Array.isArray(items) || items.length === 0) {
+        items = (window.CorpSystem && window.CorpSystem.DEFAULT_SUPPLY_ITEMS) || [];
+      }
 
       select.innerHTML = '<option value="" disabled selected>-- กรุณาเลือกรายการอุปกรณ์สำนักงาน --</option>';
 
@@ -471,28 +583,113 @@
     window.adjustQuantity = adjustQuantity;
 
     // Load and Render User's OWN Requisitions
-    async function loadMyRequisitions() {
+    async function fetchUserRequisitions() {
+      const historyContainer = document.getElementById('history-list-container');
+      const loadingSpinner = document.getElementById('history-loading-spinner');
+      const emptyState = document.getElementById('emptyState');
+      const tableWrapper = document.getElementById('tableWrapper');
+
+      // 1. ดึงข้อมูล User ล่าสุดจาก LocalStorage
+      const storedUser = localStorage.getItem('currentUser') || localStorage.getItem('corp_user');
+      const currentUser = storedUser ? JSON.parse(storedUser) : null;
+
+      // ถ้าไม่มี User ให้ปลด Spinner แล้วแสดงแจ้งเตือน
+      if (!currentUser || !currentUser.id) {
+        if (loadingSpinner) loadingSpinner.style.display = 'none';
+        if (historyContainer) {
+          historyContainer.innerHTML = `
+            <tr id="noUserRow">
+              <td colspan="5" class="text-center py-6 text-gray-500 font-medium">
+                กรุณาเข้าสู่ระบบเพื่อดูประวัติการเบิกอุปกรณ์
+              </td>
+            </tr>`;
+        }
+        return;
+      }
+
       try {
-        if (!currentUser) return;
-        allMyRequisitions = await CorpSystem.fetchUserRequisitions(currentUser.id);
-        updateKpis(allMyRequisitions);
+        // 2. ดึงข้อมูลจาก Supabase ตาม user_id
+        let client = (typeof supabaseClient !== 'undefined' && supabaseClient)
+          ? supabaseClient
+          : (window.CorpSystem && window.CorpSystem.getSupabaseClient ? window.CorpSystem.getSupabaseClient() : null);
+
+        let data = [];
+        if (client && typeof client.from === 'function') {
+          const res = await client
+            .from('requisitions')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .order('created_at', { ascending: false });
+
+          if (res.error) throw res.error;
+          data = res.data;
+        } else if (window.CorpSystem && typeof window.CorpSystem.fetchUserRequisitions === 'function') {
+          data = await window.CorpSystem.fetchUserRequisitions(currentUser.id);
+        }
+
+        allMyRequisitions = Array.isArray(data) ? data : [];
+
+        // 4. Render ข้อมูลลงตาราง หรือแสดง Empty State ถ้าว่าง
+        if (!data || data.length === 0) {
+          if (emptyState) emptyState.classList.remove('hidden');
+          if (historyContainer) {
+            historyContainer.innerHTML = `
+              <tr id="emptyHistoryRow">
+                <td colspan="5" class="py-10 text-center">
+                  <div class="w-12 h-12 mx-auto rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center text-2xl mb-2">
+                    <i class="fa-regular fa-folder-open"></i>
+                  </div>
+                  <h3 class="text-sm font-bold text-slate-700">ยังไม่มีประวัติการเบิกอุปกรณ์</h3>
+                  <div class="text-center py-2 text-gray-400 text-xs">ยังไม่มีประวัติการขอเบิกอุปกรณ์</div>
+                  <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">เริ่มยื่นคำขอเบิกอุปกรณ์ได้โดยเลือกรายการจากแบบฟอร์มด้านซ้ายมือ</p>
+                </td>
+              </tr>`;
+          }
+          return;
+        }
+
+        // กรณีมีข้อมูล Render แถวตาราง
+        if (emptyState) emptyState.classList.add('hidden');
+        if (tableWrapper) tableWrapper.classList.remove('hidden');
         renderRequisitionsTable(allMyRequisitions);
+
       } catch (err) {
-        console.error("Error loading user requisitions:", err);
+        console.error("Fetch History Error:", err);
+        if (historyContainer) {
+          historyContainer.innerHTML = `
+            <tr>
+              <td colspan="5" class="text-center py-4 text-red-500 text-sm">
+                เกิดข้อผิดพลาดในการดึงข้อมูล กรุณาลองใหม่อีกครั้ง
+              </td>
+            </tr>`;
+        }
+      } finally {
+        // 3. ปิด Spinner ใน finally เสมอ
+        if (loadingSpinner) loadingSpinner.style.display = 'none';
+        updateKpis(allMyRequisitions || []);
       }
     }
+    window.fetchUserRequisitions = fetchUserRequisitions;
+    const loadMyRequisitions = fetchUserRequisitions;
+    window.loadMyRequisitions = loadMyRequisitions;
 
     function updateKpis(list) {
-      const total = list.length;
-      const pending = list.filter(r => r.status === 'pending').length;
-      const approved = list.filter(r => r.status === 'approved').length;
-      const rejected = list.filter(r => r.status === 'rejected').length;
+      const safeList = Array.isArray(list) ? list.filter(Boolean) : [];
+      const total = safeList.length;
+      const pending = safeList.filter(r => r.status === 'pending').length;
+      const approved = safeList.filter(r => r.status === 'approved').length;
+      const rejected = safeList.filter(r => r.status === 'rejected').length;
 
-      document.getElementById('kpiTotal').textContent = total;
-      document.getElementById('kpiPending').textContent = pending;
-      document.getElementById('kpiApproved').textContent = approved;
-      document.getElementById('kpiRejected').textContent = rejected;
-      document.getElementById('myReqCountBadge').textContent = `${total} รายการ`;
+      const kpiTotal = document.getElementById('kpiTotal');
+      if (kpiTotal) kpiTotal.textContent = total;
+      const kpiPending = document.getElementById('kpiPending');
+      if (kpiPending) kpiPending.textContent = pending;
+      const kpiApproved = document.getElementById('kpiApproved');
+      if (kpiApproved) kpiApproved.textContent = approved;
+      const kpiRejected = document.getElementById('kpiRejected');
+      if (kpiRejected) kpiRejected.textContent = rejected;
+      const myReqCountBadge = document.getElementById('myReqCountBadge');
+      if (myReqCountBadge) myReqCountBadge.textContent = `${total} รายการ`;
     }
 
     function filterUserRequisitions(status) {
@@ -508,15 +705,43 @@
     function renderRequisitionsTable(list) {
       const tbody = document.getElementById('userRequisitionsTableBody');
       const emptyState = document.getElementById('emptyState');
+      const tableWrapper = document.getElementById('tableWrapper');
 
-      if (!list || list.length === 0) {
-        tbody.innerHTML = '';
-        emptyState.classList.remove('hidden');
+      const safeList = Array.isArray(list) ? list.filter(Boolean) : [];
+
+      if (safeList.length === 0) {
+        // HIDE loading spinner row and show empty state
+        if (tbody) {
+          tbody.innerHTML = `
+            <tr id="emptyHistoryRow">
+              <td colspan="5" class="py-10 text-center text-slate-400">
+                <div class="w-12 h-12 mx-auto rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center text-2xl mb-2">
+                  <i class="fa-regular fa-folder-open"></i>
+                </div>
+                <h3 class="text-sm font-bold text-slate-700">ยังไม่มีประวัติการเบิกอุปกรณ์</h3>
+                <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">เริ่มยื่นคำขอเบิกอุปกรณ์ได้โดยเลือกรายการจากแบบฟอร์มด้านซ้ายมือ</p>
+              </td>
+            </tr>
+          `;
+        }
+        if (emptyState) {
+          emptyState.classList.remove('hidden');
+          emptyState.innerHTML = `
+            <div class="w-14 h-14 mx-auto rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center text-2xl mb-3">
+              <i class="fa-regular fa-folder-open"></i>
+            </div>
+            <h3 class="text-sm font-bold text-slate-700">ยังไม่มีประวัติการเบิกอุปกรณ์</h3>
+            <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">เริ่มยื่นคำขอเบิกอุปกรณ์ได้โดยเลือกรายการจากแบบฟอร์มด้านซ้ายมือ</p>
+          `;
+        }
         return;
       }
 
-      emptyState.classList.add('hidden');
-      tbody.innerHTML = list.map(req => {
+      if (tableWrapper) tableWrapper.classList.remove('hidden');
+      if (emptyState) emptyState.classList.add('hidden');
+
+      if (tbody) {
+        tbody.innerHTML = safeList.map(req => {
         let statusBadge = '';
         if (req.status === 'pending') {
           statusBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
@@ -567,11 +792,31 @@
           </tr>
         `;
       }).join('');
+      }
     }
 
     // Submit Form 1: Office Supply Requisition (table `requisitions`)
     document.getElementById('requisitionForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+
+      // Check if currentUser / session exists before proceeding
+      const user = (window.CorpSystem && window.CorpSystem.getCurrentUser) ? window.CorpSystem.getCurrentUser() : currentUser;
+      if (!user || !user.id) {
+        if (window.Swal) {
+          await Swal.fire({
+            title: 'กรุณาเข้าสู่ระบบก่อนใช้งาน',
+            text: 'ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบก่อนใช้งาน',
+            icon: 'warning',
+            confirmButtonColor: '#2563eb',
+            confirmButtonText: 'เข้าสู่ระบบ'
+          });
+        } else {
+          alert('กรุณาเข้าสู่ระบบก่อนใช้งาน');
+        }
+        window.location.href = 'index.html';
+        return;
+      }
+
       const select = document.getElementById('reqItemId');
       const itemId = select.value;
       const selectedOption = select.options[select.selectedIndex];
@@ -595,9 +840,9 @@
 
       try {
         const payload = {
-          user_id: currentUser.id,
-          user_name: currentUser.full_name || currentUser.username,
-          user_phone: currentUser.phone,
+          user_id: user.id,
+          user_name: user.full_name || user.username,
+          user_phone: user.phone,
           item_id: parseInt(itemId),
           item_name: itemName,
           quantity: quantity,
@@ -609,21 +854,23 @@
         const result = await CorpSystem.insertRequisitionToSupabase(payload);
 
         if (result.success) {
-          // Toast notification on success
           CorpSystem.showToast('success', 'ส่งคำขอเบิกอุปกรณ์ลง Supabase สำเร็จ (Status: Pending)');
+          Swal.fire({
+            title: 'ส่งคำขอเบิกสำเร็จ!',
+            text: 'คำขอเบิกอุปกรณ์ของคุณได้รับการบันทึกลงฐานข้อมูล Supabase เรียบร้อยแล้ว (สถานะ: รอการอนุมัติ)',
+            icon: 'success',
+            confirmButtonColor: '#2563eb',
+            confirmButtonText: 'ตกลง'
+          });
         } else {
-          // Show REAL Supabase error message as required
           console.warn("Real Supabase Requisition Error:", result.error);
           Swal.fire({
             title: 'ข้อความแจ้งเตือนจาก Supabase',
             html: `<div class="text-sm text-left space-y-2">
                     <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs">
                       <p class="font-bold">Supabase API Error Message:</p>
-                      <p class="font-mono mt-1 text-rose-600">${result.errorMessage}</p>
+                      <p class="font-mono mt-1 text-rose-600">${result.errorMessage || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล'}</p>
                     </div>
-                    <p class="text-xs text-slate-500">
-                      ระบบได้บันทึกคำขอลง Local Repository ให้คุณแล้ว และแสดงในตารางคำขอของคุณทันที
-                    </p>
                    </div>`,
             icon: 'warning',
             confirmButtonColor: '#2563eb'
@@ -655,6 +902,25 @@
 
     // Delete Requisition with Data Ownership
     function confirmDeleteRequisition(reqId) {
+      const user = (window.CorpSystem && window.CorpSystem.getCurrentUser) ? window.CorpSystem.getCurrentUser() : currentUser;
+      if (!user || !user.id) {
+        if (window.Swal) {
+          Swal.fire({
+            title: 'กรุณาเข้าสู่ระบบก่อนใช้งาน',
+            text: 'ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบก่อนใช้งาน',
+            icon: 'warning',
+            confirmButtonColor: '#2563eb',
+            confirmButtonText: 'เข้าสู่ระบบ'
+          }).then(() => {
+            window.location.href = 'index.html';
+          });
+        } else {
+          alert('กรุณาเข้าสู่ระบบก่อนใช้งาน');
+          window.location.href = 'index.html';
+        }
+        return;
+      }
+
       Swal.fire({
         title: 'ยืนยันการลบคำขอเบิก?',
         text: 'คุณต้องการลบรายการคำขอเบิกนี้ออกจากฐานข้อมูลใช่หรือไม่?',
@@ -667,7 +933,7 @@
       }).then(async (result) => {
         if (result.isConfirmed) {
           try {
-            const deleteRes = await CorpSystem.deleteRequisitionFromSupabase(reqId, currentUser.id, currentUser.role === 'admin');
+            const deleteRes = await CorpSystem.deleteRequisitionFromSupabase(reqId, user.id, user.role === 'admin');
             
             if (deleteRes.success) {
               CorpSystem.showToast('success', 'ลบรายการคำขอเบิกเรียบร้อยแล้ว');
@@ -678,8 +944,8 @@
             await loadMyRequisitions();
           } catch (err) {
             Swal.fire({
-              title: 'ไม่สามารถลบรายการได้',
-              text: err.message || 'เกิดข้อผิดพลาดในการลบคำขอ',
+              title: 'เกิดข้อผิดพลาด',
+              text: err.message || 'ไม่สามารถลบรายการได้',
               icon: 'error',
               confirmButtonColor: '#2563eb'
             });

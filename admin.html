@@ -33,9 +33,6 @@
 
   <!-- Supabase JS SDK via CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-  <!-- Load Shared Utilities & Database Layer -->
-  <script src="shared.js"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans antialiased">
 
@@ -256,20 +253,66 @@
 
   <!-- Admin JavaScript Logic -->
   <script>
+    const CorpSystem = window.CorpSystem || (typeof globalThis !== 'undefined' ? globalThis.CorpSystem : null);
+    window.CorpSystem = CorpSystem;
+
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        if (window.CorpSystem && window.CorpSystem.clearSession) {
+          window.CorpSystem.clearSession();
+        } else {
+          localStorage.removeItem('currentUser');
+          localStorage.removeItem('corp_user');
+          window.location.replace('index.html');
+        }
+      });
+    }
+
     // 1. Strict RBAC Enforcement: Page requires 'admin' role
-    const currentUser = CorpSystem.requireAuth('admin');
+    const currentUser = (window.CorpSystem && typeof window.CorpSystem.getCurrentUser === 'function')
+      ? window.CorpSystem.getCurrentUser()
+      : (function() {
+          try {
+            const raw = localStorage.getItem('currentUser') || localStorage.getItem('corp_user');
+            return raw ? JSON.parse(raw) : null;
+          } catch(e) { return null; }
+        })();
+
     let allRequisitions = [];
 
-    if (currentUser) {
+    if (!currentUser || !currentUser.id) {
+      window.location.replace('index.html');
+    } else if (currentUser.role !== 'admin') {
+      window.location.replace('dashboard.html');
+    } else {
       document.getElementById('adminFullName').textContent = currentUser.full_name || currentUser.username;
       document.getElementById('adminUsername').textContent = currentUser.username || '-';
-      document.getElementById('adminMaskedPhone').textContent = CorpSystem.maskPhoneNumber(currentUser.phone);
+      document.getElementById('adminMaskedPhone').textContent = CorpSystem ? CorpSystem.maskPhoneNumber(currentUser.phone) : (currentUser.phone || '-');
 
       loadAdminRequisitions();
     }
 
     async function loadAdminRequisitions() {
       try {
+        const user = (window.CorpSystem && window.CorpSystem.getCurrentUser) ? window.CorpSystem.getCurrentUser() : currentUser;
+        if (!user || !user.id) {
+          if (window.Swal) {
+            Swal.fire({
+              title: 'กรุณาเข้าสู่ระบบก่อนใช้งาน',
+              text: 'ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบก่อนใช้งาน',
+              icon: 'warning',
+              confirmButtonColor: '#2563eb',
+              confirmButtonText: 'เข้าสู่ระบบ'
+            }).then(() => {
+              window.location.href = 'index.html';
+            });
+          } else {
+            alert('กรุณาเข้าสู่ระบบก่อนใช้งาน');
+            window.location.href = 'index.html';
+          }
+          return;
+        }
         allRequisitions = await CorpSystem.fetchAllRequisitionsForAdmin();
         updateAdminKpis(allRequisitions);
         applyFilters();
@@ -315,16 +358,19 @@
     function renderAdminTable(list) {
       const tbody = document.getElementById('adminRequisitionsTableBody');
       const emptyState = document.getElementById('adminEmptyState');
-      document.getElementById('adminTotalBadge').textContent = `${list.length} รายการ`;
+      const safeList = Array.isArray(list) ? list.filter(Boolean) : [];
+      const badge = document.getElementById('adminTotalBadge');
+      if (badge) badge.textContent = `${safeList.length} รายการ`;
 
-      if (!list || list.length === 0) {
-        tbody.innerHTML = '';
-        emptyState.classList.remove('hidden');
+      if (!list || safeList.length === 0) {
+        if (tbody) tbody.innerHTML = '';
+        if (emptyState) emptyState.classList.remove('hidden');
         return;
       }
 
-      emptyState.classList.add('hidden');
-      tbody.innerHTML = list.map(req => {
+      if (emptyState) emptyState.classList.add('hidden');
+      if (tbody) {
+        tbody.innerHTML = safeList.map(req => {
         let statusBadge = '';
         if (req.status === 'pending') {
           statusBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
@@ -413,10 +459,30 @@
           </tr>
         `;
       }).join('');
+      }
     }
 
     // Approve Requisition (Updates status in Supabase table `requisitions`)
     function handleApprove(reqId, itemName) {
+      const user = (window.CorpSystem && window.CorpSystem.getCurrentUser) ? window.CorpSystem.getCurrentUser() : currentUser;
+      if (!user || !user.id) {
+        if (window.Swal) {
+          Swal.fire({
+            title: 'กรุณาเข้าสู่ระบบก่อนใช้งาน',
+            text: 'ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบก่อนใช้งาน',
+            icon: 'warning',
+            confirmButtonColor: '#2563eb',
+            confirmButtonText: 'เข้าสู่ระบบ'
+          }).then(() => {
+            window.location.href = 'index.html';
+          });
+        } else {
+          alert('กรุณาเข้าสู่ระบบก่อนใช้งาน');
+          window.location.href = 'index.html';
+        }
+        return;
+      }
+
       Swal.fire({
         title: 'ยืนยันการอนุมัติคำขอเบิก?',
         html: `<div class="text-sm">
@@ -473,6 +539,25 @@
 
     // Reject Requisition (Updates status in Supabase table `requisitions`)
     function handleReject(reqId, itemName) {
+      const user = (window.CorpSystem && window.CorpSystem.getCurrentUser) ? window.CorpSystem.getCurrentUser() : currentUser;
+      if (!user || !user.id) {
+        if (window.Swal) {
+          Swal.fire({
+            title: 'กรุณาเข้าสู่ระบบก่อนใช้งาน',
+            text: 'ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบก่อนใช้งาน',
+            icon: 'warning',
+            confirmButtonColor: '#2563eb',
+            confirmButtonText: 'เข้าสู่ระบบ'
+          }).then(() => {
+            window.location.href = 'index.html';
+          });
+        } else {
+          alert('กรุณาเข้าสู่ระบบก่อนใช้งาน');
+          window.location.href = 'index.html';
+        }
+        return;
+      }
+
       Swal.fire({
         title: 'ยืนยันการปฏิเสธคำขอเบิก?',
         html: `<div class="text-sm">

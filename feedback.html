@@ -33,9 +33,6 @@
 
   <!-- Supabase JS SDK via CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-  <!-- Load Shared Utilities & Database Layer -->
-  <script src="shared.js"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans antialiased">
 
@@ -128,27 +125,31 @@
                 ระดับความพึงพอใจโดยรวม (Rating: 1 - 5 ดาว) <span class="text-rose-500">*</span>
               </label>
               
-              <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-center space-y-3">
-                <div id="starContainer" class="flex items-center justify-center gap-2 sm:gap-3 text-3xl sm:text-4xl">
-                  <button type="button" class="star-btn text-amber-400 hover:scale-110 transition-transform focus:outline-none" data-value="1">
-                    <i class="fa-solid fa-star"></i>
+              <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-center space-y-3 star-rating-container">
+                <input type="hidden" id="selectedRating" name="rating" value="5" />
+                <div id="starContainer" class="star-rating-container flex items-center justify-center gap-2 sm:gap-3 text-3xl sm:text-4xl py-1 select-none">
+                  <button type="button" class="star-btn star-icon p-2 rounded-2xl transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400/40 hover:scale-125 active:scale-95 text-yellow-400 fill-current" data-value="1" aria-label="1 ดาว (ควรปรับปรุง)">
+                    <i class="fa-solid fa-star text-yellow-400 fill-current drop-shadow-sm pointer-events-none transition-colors"></i>
                   </button>
-                  <button type="button" class="star-btn text-amber-400 hover:scale-110 transition-transform focus:outline-none" data-value="2">
-                    <i class="fa-solid fa-star"></i>
+                  <button type="button" class="star-btn star-icon p-2 rounded-2xl transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400/40 hover:scale-125 active:scale-95 text-yellow-400 fill-current" data-value="2" aria-label="2 ดาว (พอใช้)">
+                    <i class="fa-solid fa-star text-yellow-400 fill-current drop-shadow-sm pointer-events-none transition-colors"></i>
                   </button>
-                  <button type="button" class="star-btn text-amber-400 hover:scale-110 transition-transform focus:outline-none" data-value="3">
-                    <i class="fa-solid fa-star"></i>
+                  <button type="button" class="star-btn star-icon p-2 rounded-2xl transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400/40 hover:scale-125 active:scale-95 text-yellow-400 fill-current" data-value="3" aria-label="3 ดาว (ปานกลาง)">
+                    <i class="fa-solid fa-star text-yellow-400 fill-current drop-shadow-sm pointer-events-none transition-colors"></i>
                   </button>
-                  <button type="button" class="star-btn text-amber-400 hover:scale-110 transition-transform focus:outline-none" data-value="4">
-                    <i class="fa-solid fa-star"></i>
+                  <button type="button" class="star-btn star-icon p-2 rounded-2xl transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400/40 hover:scale-125 active:scale-95 text-yellow-400 fill-current" data-value="4" aria-label="4 ดาว (ดีมาก)">
+                    <i class="fa-solid fa-star text-yellow-400 fill-current drop-shadow-sm pointer-events-none transition-colors"></i>
                   </button>
-                  <button type="button" class="star-btn text-amber-400 hover:scale-110 transition-transform focus:outline-none" data-value="5">
-                    <i class="fa-solid fa-star"></i>
+                  <button type="button" class="star-btn star-icon p-2 rounded-2xl transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400/40 hover:scale-125 active:scale-95 text-yellow-400 fill-current" data-value="5" aria-label="5 ดาว (ดีเยี่ยม)">
+                    <i class="fa-solid fa-star text-yellow-400 fill-current drop-shadow-sm pointer-events-none transition-colors"></i>
                   </button>
                 </div>
 
-                <div class="inline-block px-3.5 py-1 rounded-full text-xs font-bold bg-white border border-slate-200 shadow-sm" id="ratingLabel">
-                  5 ดาว - ดีเยี่ยม (Excellent)
+                <div class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold bg-white border border-slate-200 shadow-sm transition-all" id="ratingLabel">
+                  <span id="ratingStarsText">⭐⭐⭐⭐⭐</span>
+                  <span id="rating-text-display" class="rating-text font-semibold">5 ดาว - ดีเยี่ยม (Excellent)</span>
+                  <span id="ratingText" class="sr-only">5 ดาว - ดีเยี่ยม (Excellent)</span>
+                  <span id="ratingDescriptionText" class="sr-only">5 ดาว - ดีเยี่ยม (Excellent)</span>
                 </div>
               </div>
             </div>
@@ -237,14 +238,25 @@
         if (window.CorpSystem && window.CorpSystem.clearSession) {
           window.CorpSystem.clearSession();
         } else {
+          localStorage.removeItem('currentUser');
           localStorage.removeItem('corp_user');
-          window.location.href = 'index.html';
+          window.location.replace('index.html');
         }
       });
     }
 
-    const currentUser = CorpSystem ? CorpSystem.requireAuth() : null;
-    if (currentUser) {
+    const currentUser = (window.CorpSystem && typeof window.CorpSystem.getCurrentUser === 'function')
+      ? window.CorpSystem.getCurrentUser()
+      : (function() {
+          try {
+            const raw = localStorage.getItem('currentUser') || localStorage.getItem('corp_user');
+            return raw ? JSON.parse(raw) : null;
+          } catch(e) { return null; }
+        })();
+
+    if (!currentUser || !currentUser.id) {
+      window.location.replace('index.html');
+    } else {
       document.getElementById('userFullName').textContent = currentUser.full_name || currentUser.username;
       document.getElementById('userMaskedPhone').textContent = CorpSystem.maskPhoneNumber(currentUser.phone);
       document.getElementById('formUserUsername').textContent = currentUser.username || 'User';
@@ -257,53 +269,123 @@
       loadFeedbackHistory();
     }
 
-    // Interactive Star Rating Logic
+    // ================= 2. INTERACTIVE STAR RATING LOGIC =================
+    // Global State สำหรับ Rating
+    let selectedRating = 5;
     let currentRating = 5;
-    const ratingDescriptions = {
-      1: "1 ดาว - ควรปรับปรุง (Poor)",
-      2: "2 ดาว - พอใช้ (Fair)",
-      3: "3 ดาว - ปานกลาง (Good)",
-      4: "4 ดาว - ดีมาก (Very Good)",
-      5: "5 ดาว - ดีเยี่ยม (Excellent)"
-    };
 
-    const starBtns = document.querySelectorAll('.star-btn');
-    const ratingLabel = document.getElementById('ratingLabel');
+    // ฟังก์ชันอัปเดตดาวแบบ Dynamic (แก้ดาวไม่ลด/เพิ่ม)
+    function setRating(stars) {
+      const val = Math.max(1, Math.min(5, parseInt(stars) || 5));
+      selectedRating = val;
+      currentRating = val;
 
-    function updateStarsDisplay(rating) {
-      starBtns.forEach(btn => {
-        const val = parseInt(btn.dataset.value);
-        const icon = btn.querySelector('i');
-        if (val <= rating) {
-          icon.className = 'fa-solid fa-star';
-          btn.className = 'star-btn text-amber-400 hover:scale-110 transition-transform focus:outline-none';
+      const starContainer = document.querySelector('.star-rating-container') || document.getElementById('starContainer');
+      const starIcons = document.querySelectorAll('.star-icon');
+      const ratingText = document.getElementById('rating-text-display');
+
+      // 1. เปลี่ยนสีดาว 1 ถึง stars ให้สว่าง (text-yellow-400 fill-current) และดวงที่เหลือให้จาง (text-gray-300)
+      starIcons.forEach((star, index) => {
+        const icon = star.querySelector('i') || star;
+        if (index < val) {
+          star.classList.add('text-yellow-400', 'fill-current');
+          star.classList.remove('text-gray-300', 'text-slate-300');
+          star.style.color = '#f59e0b';
+          if (icon && icon !== star) {
+            icon.classList.add('text-yellow-400', 'fill-current');
+            icon.classList.remove('text-gray-300', 'text-slate-300');
+            icon.style.color = '#f59e0b';
+          }
         } else {
-          icon.className = 'fa-regular fa-star';
-          btn.className = 'star-btn text-slate-300 hover:scale-110 transition-transform focus:outline-none';
+          star.classList.remove('text-yellow-400', 'fill-current');
+          star.classList.add('text-gray-300');
+          star.style.color = '#cbd5e1';
+          if (icon && icon !== star) {
+            icon.classList.remove('text-yellow-400', 'fill-current');
+            icon.classList.add('text-gray-300');
+            icon.style.color = '#cbd5e1';
+          }
         }
       });
-      ratingLabel.textContent = ratingDescriptions[rating] || `${rating} ดาว`;
+
+      // 2. อัปเดตข้อความแสดงผล
+      const labels = {
+        1: '1 ดาว - ปรับปรุง (Poor)',
+        2: '2 ดาว - พอใช้ (Fair)',
+        3: '3 ดาว - ปานกลาง (Average)',
+        4: '4 ดาว - ดี (Good)',
+        5: '5 ดาว - ดีเยี่ยม (Excellent)'
+      };
+      const starsEmoji = {
+        1: '⭐',
+        2: '⭐⭐',
+        3: '⭐⭐⭐',
+        4: '⭐⭐⭐⭐',
+        5: '⭐⭐⭐⭐⭐'
+      };
+      const badgeClasses = {
+        1: 'bg-rose-50 text-rose-700 border-rose-200',
+        2: 'bg-orange-50 text-orange-700 border-orange-200',
+        3: 'bg-amber-50 text-amber-700 border-amber-200',
+        4: 'bg-blue-50 text-blue-700 border-blue-200',
+        5: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      };
+
+      const displayText = labels[val] || `${val} ดาว`;
+      if (ratingText) ratingText.textContent = displayText;
+
+      const ratingTextAlt = document.getElementById('ratingText');
+      if (ratingTextAlt && ratingTextAlt !== ratingText) ratingTextAlt.textContent = displayText;
+
+      const ratingDescriptionText = document.getElementById('ratingDescriptionText');
+      if (ratingDescriptionText) ratingDescriptionText.textContent = displayText;
+
+      const ratingStarsText = document.getElementById('ratingStarsText');
+      if (ratingStarsText) ratingStarsText.textContent = starsEmoji[val] || '⭐'.repeat(val);
+
+      const ratingLabel = document.getElementById('ratingLabel');
+      if (ratingLabel) {
+        ratingLabel.className = `inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold border shadow-sm transition-all duration-150 ${badgeClasses[val] || badgeClasses[5]}`;
+      }
+
+      const selectedRatingInput = document.getElementById('selectedRating');
+      if (selectedRatingInput) selectedRatingInput.value = val;
     }
+    window.setRating = setRating;
+    window.selectedRating = selectedRating;
 
-    starBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        currentRating = parseInt(btn.dataset.value);
-        updateStarsDisplay(currentRating);
-      });
-
-      btn.addEventListener('mouseenter', () => {
-        const hoverVal = parseInt(btn.dataset.value);
-        updateStarsDisplay(hoverVal);
+    // ผูก Event Listener ให้ดาวทุกดวง (1-5)
+    document.querySelectorAll('.star-icon').forEach((star, index) => {
+      star.addEventListener('click', (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        setRating(index + 1);
       });
     });
 
-    document.getElementById('starContainer').addEventListener('mouseleave', () => {
-      updateStarsDisplay(currentRating);
-    });
+    // Initial render
+    setRating(selectedRating);
 
     // Load Feedback History
     async function loadFeedbackHistory() {
       try {
+        const user = (window.CorpSystem && window.CorpSystem.getCurrentUser) ? window.CorpSystem.getCurrentUser() : currentUser;
+        if (!user || !user.id) {
+          if (window.Swal) {
+            Swal.fire({
+              title: 'กรุณาเข้าสู่ระบบก่อนใช้งาน',
+              text: 'ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบก่อนใช้งาน',
+              icon: 'warning',
+              confirmButtonColor: '#f59e0b',
+              confirmButtonText: 'เข้าสู่ระบบ'
+            }).then(() => {
+              window.location.href = 'index.html';
+            });
+          } else {
+            alert('กรุณาเข้าสู่ระบบก่อนใช้งาน');
+            window.location.href = 'index.html';
+          }
+          return;
+        }
         const list = await CorpSystem.fetchAllFeedbacks();
         renderFeedbackList(list);
       } catch (err) {
@@ -313,19 +395,26 @@
 
     function renderFeedbackList(list) {
       const container = document.getElementById('feedbackListContainer');
-      document.getElementById('feedbackCountBadge').textContent = `${list.length} รายการ`;
+      const safeList = Array.isArray(list) ? list.filter(Boolean) : [];
+      const badge = document.getElementById('feedbackCountBadge');
+      if (badge) badge.textContent = `${safeList.length} รายการ`;
 
-      if (!list || list.length === 0) {
+      if (!container) return;
+
+      if (safeList.length === 0) {
         container.innerHTML = `
-          <div class="py-8 text-center text-slate-400 text-xs">
-            <i class="fa-regular fa-comment-dots text-2xl text-slate-300 mb-2"></i>
-            <p>ยังไม่มีประวัติแบบประเมินในระบบ</p>
+          <div class="py-12 text-center text-slate-400 text-xs bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+            <div class="w-12 h-12 mx-auto rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center text-xl mb-2">
+              <i class="fa-regular fa-comment-dots"></i>
+            </div>
+            <p class="font-semibold text-slate-600">ยังไม่มีประวัติแบบประเมินในระบบ</p>
+            <p class="text-slate-400 mt-0.5">ร่วมส่งความคิดเห็นและประเมินความพึงพอใจการให้บริการได้ผ่านแบบฟอร์มด้านซ้าย</p>
           </div>
         `;
         return;
       }
 
-      container.innerHTML = list.map(item => {
+      container.innerHTML = safeList.map(item => {
         const starsHtml = Array.from({ length: 5 }, (_, i) => {
           return i < item.rating 
             ? '<i class="fa-solid fa-star text-amber-400 text-xs"></i>'
@@ -361,6 +450,25 @@
     // Submit Feedback Form (Form 2)
     document.getElementById('feedbackForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+
+      // Check if currentUser / session exists before proceeding
+      const user = (window.CorpSystem && window.CorpSystem.getCurrentUser) ? window.CorpSystem.getCurrentUser() : currentUser;
+      if (!user || !user.id) {
+        if (window.Swal) {
+          await Swal.fire({
+            title: 'กรุณาเข้าสู่ระบบก่อนใช้งาน',
+            text: 'ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบก่อนใช้งาน',
+            icon: 'warning',
+            confirmButtonColor: '#f59e0b',
+            confirmButtonText: 'เข้าสู่ระบบ'
+          });
+        } else {
+          alert('กรุณาเข้าสู่ระบบก่อนใช้งาน');
+        }
+        window.location.href = 'index.html';
+        return;
+      }
+
       const comment = document.getElementById('feedbackComment').value.trim();
       const submitBtn = document.getElementById('feedbackSubmitBtn');
 
@@ -379,8 +487,8 @@
 
       try {
         const feedbackPayload = {
-          user_id: currentUser.id,
-          user_name: currentUser.full_name || currentUser.username,
+          user_id: user.id,
+          user_name: user.full_name || user.username,
           rating: currentRating,
           comment: comment
         };

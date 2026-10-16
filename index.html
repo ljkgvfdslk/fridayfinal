@@ -120,10 +120,10 @@
         <div class="p-6 sm:p-8">
 
           <!-- ================= TAB 1: LOGIN FORM ================= -->
-          <div id="loginSection" class="space-y-5">
+          <div id="loginSection" class="space-y-4">
             <div class="text-center sm:text-left">
               <h2 class="text-lg font-bold text-slate-800">เข้าสู่ระบบด้วยบัญชีองค์กร</h2>
-              <p class="text-xs text-slate-500 mt-0.5">กรอกชื่อผู้ใช้ (Username) หรือเบอร์โทรศัพท์ และรหัสผ่าน</p>
+              <p class="text-xs text-slate-500 mt-0.5">กรอกชื่อผู้ใช้ (Username) หรือเบอร์โทรศัพท์ และรหัสผ่านที่ลงทะเบียนไว้ใน Supabase</p>
             </div>
 
             <form id="loginForm" class="space-y-4">
@@ -135,7 +135,7 @@
                   <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                     <i class="fa-regular fa-user"></i>
                   </div>
-                  <input type="text" id="loginIdentifier" required placeholder="เช่น somchai หรือ 0812345678"
+                  <input type="text" id="loginIdentifier" required placeholder="กรอกชื่อผู้ใช้ (Username) หรือเบอร์โทรศัพท์"
                     class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white outline-none transition" />
                 </div>
               </div>
@@ -161,18 +161,18 @@
                 </div>
               </div>
 
-              <div class="flex items-center justify-between text-xs text-slate-600 pt-1">
+              <div class="flex items-center justify-between text-xs text-slate-600 pt-0.5">
                 <label class="flex items-center gap-2 cursor-pointer select-none">
                   <input type="checkbox" id="rememberMe" checked class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300" />
                   <span>จดจำการเข้าสู่ระบบในเครื่องนี้</span>
                 </label>
                 <span class="text-slate-400 flex items-center gap-1">
-                  <i class="fa-solid fa-shield-halved text-emerald-500"></i> SSL / TLS Encrypted
+                  <i class="fa-solid fa-shield-halved text-emerald-500"></i> Supabase Auth
                 </span>
               </div>
 
               <button type="submit" id="loginSubmitBtn"
-                class="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50">
+                class="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer">
                 <i class="fa-solid fa-right-to-bracket"></i>
                 <span>เข้าสู่ระบบ (Sign In)</span>
               </button>
@@ -418,7 +418,7 @@
       });
     }
 
-    // ================= LOGIN SUBMISSION =================
+    // ================= LOGIN SUBMISSION (Real Supabase Auth) =================
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const identifier = document.getElementById('loginIdentifier').value.trim();
@@ -426,36 +426,48 @@
       const submitBtn = document.getElementById('loginSubmitBtn');
       const sys = getCorpSystem();
 
+      if (!identifier || !password) {
+        Swal.fire({
+          title: 'กรุณากรอกข้อมูลให้ครบถ้วน',
+          text: 'กรุณากรอกชื่อผู้ใช้หรือเบอร์โทรศัพท์ และรหัสผ่าน',
+          icon: 'warning',
+          confirmButtonColor: '#2563eb'
+        });
+        return;
+      }
+
       submitBtn.disabled = true;
-      submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> <span>กำลังตรวจสอบกับ Supabase...</span>';
+      submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> <span>กำลังตรวจสอบบัญชีใน Supabase...</span>';
 
       try {
         const hashedPassword = await hashPassword(password);
-        
-        let user = null;
-        let error = null;
+        const loginRes = await sys.loginUserFromSupabase(identifier, hashedPassword);
 
-        if (typeof sys.loginUserFromSupabase === 'function') {
-          const res = await sys.loginUserFromSupabase(identifier, hashedPassword);
-          user = res.user;
-          error = res.error;
-        } else {
-          // Session storage fallback
-          const localUsers = JSON.parse(localStorage.getItem('corp_users') || '[]');
-          user = localUsers.find(u => 
-            ((u.username && u.username.toLowerCase() === identifier.toLowerCase()) ||
-             (u.phone && u.phone === identifier)) &&
-            u.password_hash === hashedPassword
-          );
+        if (!loginRes || !loginRes.user) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> <span>เข้าสู่ระบบ (Sign In)</span>';
+
+          const errMsg = (loginRes && loginRes.error) ? loginRes.error.message : 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบหรือทำการลงทะเบียนสมาชิกใหม่';
+
+          Swal.fire({
+            title: 'เข้าสู่ระบบไม่สำเร็จ',
+            text: errMsg,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#059669',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: '<i class="fa-solid fa-user-plus"></i> สมัครสมาชิกใหม่',
+            cancelButtonText: 'ลองใหม่อีกครั้ง'
+          }).then((res) => {
+            if (res.isConfirmed) {
+              const tabReg = document.getElementById('tabRegisterBtn');
+              if (tabReg) tabReg.click();
+            }
+          });
+          return;
         }
 
-        if (error && typeof sys.showToast === 'function') {
-          sys.showToast('warning', `Supabase Notice: ${error.message}`);
-        }
-
-        if (!user) {
-          throw new Error("ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบหรือทำการลงทะเบียนสมาชิกใหม่");
-        }
+        const user = loginRes.user;
 
         // Login successful!
         const sessionPayload = {
@@ -469,6 +481,7 @@
         if (typeof sys.setCurrentUser === 'function') {
           sys.setCurrentUser(sessionPayload);
         } else {
+          localStorage.setItem('currentUser', JSON.stringify(sessionPayload));
           localStorage.setItem('corp_user', JSON.stringify(sessionPayload));
         }
 
@@ -482,13 +495,13 @@
           } else {
             window.location.href = 'dashboard.html';
           }
-        }, 900);
+        }, 500);
 
       } catch (err) {
-        console.error("Login Error:", err);
+        console.warn("Login Exception:", err);
         Swal.fire({
           title: 'เข้าสู่ระบบไม่สำเร็จ',
-          text: err.message || 'ข้อมูลการเข้าสู่ระบบไม่ถูกต้อง',
+          text: err.message || 'เกิดข้อผิดพลาดในการตรวจสอบข้อมูล กรุณาลองใหม่อีกครั้ง',
           icon: 'error',
           confirmButtonColor: '#2563eb',
           confirmButtonText: 'ตกลง'
@@ -573,6 +586,7 @@
           if (typeof sys.setCurrentUser === 'function') {
             sys.setCurrentUser(sessionUser);
           } else {
+            localStorage.setItem('currentUser', JSON.stringify(sessionUser));
             localStorage.setItem('corp_user', JSON.stringify(sessionUser));
           }
         };
